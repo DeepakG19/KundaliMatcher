@@ -1,0 +1,309 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kundali Matchmaking Wrapper</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .form-group {
+            margin-bottom: 10px;
+        }
+        label {
+            display: inline-block;
+            width: 150px;
+        }
+        input, select {
+            padding: 5px;
+            width: 200px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #women-list {
+            margin-top: 10px;
+        }
+        .woman-entry {
+            border-bottom: 1px solid #eee;
+            padding: 10px 0;
+        }
+        #results {
+            margin-top: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .iframe-hidden {
+            display: none;
+        }
+        #loading {
+            display: none;
+            color: #007BFF;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Kundali Matchmaking Wrapper</h1>
+    <div class="section">
+        <h2>Man's Kundali Details</h2>
+        <div class="form-group">
+            <label>Name:</label>
+            <input type="text" id="man-name" required>
+        </div>
+        <div class="form-group">
+            <label>Date of Birth:</label>
+            <input type="date" id="man-dob" required>
+        </div>
+        <div class="form-group">
+            <label>Time of Birth:</label>
+            <input type="time" id="man-tob" required>
+        </div>
+        <div class="form-group">
+            <label>Place of Birth:</label>
+            <input type="text" id="man-pob" required>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Women's Kundali Details</h2>
+        <div id="woman-form">
+            <div class="form-group">
+                <label>Name:</label>
+                <input type="text" class="woman-name" required>
+            </div>
+            <div class="form-group">
+                <label>Date of Birth:</label>
+                <input type="date" class="woman-dob" required>
+            </div>
+            <div class="form-group">
+                <label>Time of Birth:</label>
+                <input type="time" class="woman-tob" required>
+            </div>
+            <div class="form-group">
+                <label>Place of Birth:</label>
+                <input type="text" class="woman-pob" required>
+            </div>
+            <button type="button" onclick="addWoman()">Add Another Woman</button>
+        </div>
+        <div id="women-list"></div>
+    </div>
+
+    <button onclick="submitMatches()">Match Kundalis</button>
+    <div id="loading">Processing matches, please wait...</div>
+    <div id="results"></div>
+
+    <div id="iframe-container"></div>
+
+    <script>
+        let women = [];
+
+        function addWoman() {
+            const name = document.querySelector('.woman-name').value;
+            const dob = document.querySelector('.woman-dob').value;
+            const tob = document.querySelector('.woman-tob').value;
+            const pob = document.querySelector('.woman-pob').value;
+
+            if (name && dob && tob && pob) {
+                women.push({ name, dob, tob, pob });
+                updateWomenList();
+                clearWomanForm();
+            } else {
+                alert('Please fill all fields for the woman.');
+            }
+        }
+
+        function updateWomenList() {
+            const list = document.getElementById('women-list');
+            list.innerHTML = '';
+            women.forEach((woman, index) => {
+                const div = document.createElement('div');
+                div.className = 'woman-entry';
+                div.innerHTML = `
+                    ${woman.name} (DOB: ${woman.dob}, Time: ${woman.tob}, Place: ${woman.pob})
+                    <button onclick="removeWoman(${index})">Remove</button>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        function removeWoman(index) {
+            women.splice(index, 1);
+            updateWomenList();
+        }
+
+        function clearWomanForm() {
+            document.querySelector('.woman-name').value = '';
+            document.querySelector('.woman-dob').value = '';
+            document.querySelector('.woman-tob').value = '';
+            document.querySelector('.woman-pob').value = '';
+        }
+
+        async function submitMatches() {
+            if (women.length === 0) {
+                alert('Please add at least one woman to match.');
+                return;
+            }
+
+            const manName = document.getElementById('man-name').value;
+            const manDob = document.getElementById('man-dob').value;
+            const manTob = document.getElementById('man-tob').value;
+            const manPob = document.getElementById('man-pob').value;
+
+            if (!manName || !manDob || !manTob || !manPob) {
+                alert('Please fill all fields for the man.');
+                return;
+            }
+
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').innerHTML = '';
+            const results = [];
+
+            for (let i = 0; i < women.length; i++) {
+                const woman = women[i];
+                const result = await matchKundali(manName, manDob, manTob, manPob, woman);
+                results.push({ woman: woman.name, result });
+            }
+
+            document.getElementById('loading').style.display = 'none';
+            displayResults(results);
+        }
+
+        function matchKundali(manName, manDob, manTob, manPob, woman) {
+            return new Promise((resolve) => {
+                const iframe = document.createElement('iframe');
+                iframe.className = 'iframe-hidden';
+                iframe.id = `iframe-${woman.name}`;
+                document.getElementById('iframe-container').appendChild(iframe);
+
+                const formHtml = `
+                    <form id="matchForm" action="https://www.astrosage.com/freechart/matchmaking.asp" method="post">
+                        <input type="hidden" name="boy_name" value="${manName}">
+                        <input type="hidden" name="boy_dob" value="${manDob}">
+                        <input type="hidden" name="boy_tob" value="${manTob}">
+                        <input type="hidden" name="boy_pob" value="${manPob}">
+                        <input type="hidden" name="girl_name" value="${woman.name}">
+                        <input type="hidden" name="girl_dob" value="${woman.dob}">
+                        <input type="hidden" name="girl_tob" value="${woman.tob}">
+                        <input type="hidden" name="girl_pob" value="${woman.pob}">
+                        <input type="hidden" name="lang" value="en">
+                    </form>
+                    <script>document.getElementById('matchForm').submit();<\/script>
+                `;
+
+                iframe.contentDocument.write(formHtml);
+
+                iframe.onload = () => {
+                    try {
+                        const content = iframe.contentDocument.body.innerHTML;
+                        const score = extractScore(content);
+                        resolve(score);
+                    } catch (e) {
+                        resolve('Error: Unable to fetch result');
+                    } finally {
+                        iframe.remove();
+                    }
+                };
+
+                setTimeout(() => {
+                    if (iframe.parentNode) {
+                        resolve('Error: Timeout');
+                        iframe.remove();
+                    }
+                }, 10000);
+            });
+        }
+
+        function extractScore(html) {
+            // This is a placeholder. You'll need to inspect AstroSage's result page to find the exact selector or regex.
+            // Example: Assuming the score is in a div with class "match-score"
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const scoreElement = doc.querySelector('.match-score'); // Adjust selector based on actual page
+            return scoreElement ? scoreElement.textContent : 'Score not found';
+        }
+
+        function displayResults(results) {
+            const resultsDiv = document.getElementById('results');
+            let html = '<h2>Matchmaking Results</h2>';
+            html += '<table>';
+            html += '<tr><th>Woman\'s Name</th><th>Match Score</th></tr>';
+            results.forEach(result => {
+                html += `<tr><td>${result.woman}</td><td>${result.result}</td></tr>`;
+            });
+            html += '</table>';
+            resultsDiv.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
